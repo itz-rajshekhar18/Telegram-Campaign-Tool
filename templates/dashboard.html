@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Laptop Status Panel</title>
+  <style>
+    body { font-family: system-ui; max-width: 800px; margin: 40px auto; padding: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 6px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Telegram Campaign Tool — Local Status</h1>
+  <div class="card">
+    <h3>System Status</h3>
+    <div id="status">Loading...</div>
+  </div>
+  <div class="card">
+    <h3>Quick Actions</h3>
+    <p>Open the Telegram Mini App from your phone while on the same WiFi.</p>
+    <p>Edit the API_BASE IP inside <code>static/miniapp.html</code> to match this laptop's local IP.</p>
+  </div>
+  <div class="card">
+    <h3>Logs</h3>
+    <pre id="logs">Backend running. Check terminal for detailed logs.</pre>
+  </div>
+  <script>
+    async function refresh() {
+      try {
+        const r = await fetch("/api/status");
+        const d = await r.json();
+        document.getElementById("status").innerText = JSON.stringify(d, null, 2);
+      } catch (e) {
+        document.getElementById("status").innerText = "Error connecting to backend";
+      }
+    }
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

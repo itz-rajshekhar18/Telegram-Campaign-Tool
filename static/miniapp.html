@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campaign Control</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 12px; background: var(--tg-theme-bg-color, #f5f5f5); color: var(--tg-theme-text-color, #222); }
+    h1 { font-size: 1.35rem; margin: 8px 0 16px; }
+    .card { background: var(--tg-theme-secondary-bg-color, #fff); border-radius: 14px; padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    button { background: var(--tg-theme-button-color, #3390ec); color: var(--tg-theme-button-text-color, #fff); border: none; padding: 10px 14px; border-radius: 10px; width: 100%; margin-top: 6px; font-size: 0.95rem; }
+    button.secondary { background: #6c757d; }
+    input, textarea, select { width: 100%; padding: 10px; margin: 6px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 0.95rem; }
+    .status { font-size: 0.85rem; padding: 8px; background: #e8f4fd; border-radius: 8px; margin-bottom: 12px; }
+    .lead { padding: 8px 0; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    .hot { color: #d32f2f; font-weight: 600; }
+    .warm { color: #f57c00; }
+    .cold { color: #757575; }
+    .small { font-size: 0.8rem; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Campaign Tool</h1>
+  <div class="status" id="status">Connecting...</div>
+
+  <div class="card">
+    <strong>New Campaign</strong>
+    <input id="name" placeholder="Campaign name">
+    <textarea id="objective" placeholder="Objective / goal" rows="2"></textarea>
+    <textarea id="info_bank" placeholder="Information Bank: product details, pricing, offers, FAQs, message style..." rows="5"></textarea>
+    <input id="keywords" placeholder="Target keywords (comma separated, e.g. education, school, coaching)">
+    <select id="profile">
+      <option value="safe">Safe (slowest, safest)</option>
+      <option value="balanced" selected>Balanced (recommended)</option>
+      <option value="aggressive">Aggressive (higher risk)</option>
+    </select>
+    <button onclick="createCampaign()">Create Campaign</button>
+  </div>
+
+  <div class="card">
+    <strong>Active Campaigns</strong>
+    <div id="campaigns">Loading...</div>
+  </div>
+
+  <div class="card">
+    <strong>Leads</strong>
+    <button class="secondary" onclick="exportLeads()">Export Leads (CSV)</button>
+    <div id="leads">Loading...</div>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    // ← CHANGE THIS to your laptop's local IP (same WiFi)
+    const API_BASE = "http://192.168.1.100:8000";
+
+    async function api(path, method = "GET", body = null) {
+      const opts = { method, headers: { "Content-Type": "application/json" } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(API_BASE + path, opts);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function loadStatus() {
+      try {
+        const s = await api("/api/status");
+        document.getElementById("status").innerHTML = 
+          `Connected • Accounts: ${s.accounts_connected} • Active campaigns: ${s.active_campaigns}`;
+      } catch (e) {
+        document.getElementById("status").innerText = "Cannot reach laptop. Same WiFi? Correct IP in this file?";
+      }
+    }
+
+    async function loadCampaigns() {
+      try {
+        const camps = await api("/api/campaigns");
+        document.getElementById("campaigns").innerHTML = camps.length ? camps.map(c => `
+          <div style="margin:10px 0; padding:10px; background:#f8f9fa; border-radius:10px;">
+            <strong>${c.name}</strong><br>
+            <span class="small">${c.status.toUpperCase()} • ${c.rate_profile}</span><br>
+            <span class="small">${(c.objective || "").substring(0,80)}</span>
+            <button onclick="startCampaign(${c.id})">Start</button>
+            <button class="secondary" onclick="pauseCampaign(${c.id})">Pause</button>
+          </div>
+        `).join("") : "<p class='small'>No campaigns yet.</p>";
+      } catch (e) {
+        document.getElementById("campaigns").innerText = "Error loading campaigns";
+      }
+    }
+
+    async function loadLeads() {
+      try {
+        const leads = await api("/api/leads");
+        document.getElementById("leads").innerHTML = leads.length ? leads.slice(0, 30).map(l => `
+          <div class="lead">
+            <strong>${l.username || l.first_name || "User"}</strong>
+            <span class="${l.score}">${l.score}</span> • ${l.status}
+            <div class="small">${l.language} • ${l.created_at ? l.created_at.substring(0,16) : ""}</div>
+          </div>
+        `).join("") : "<p class='small'>No leads captured yet.</p>";
+      } catch (e) {
+        document.getElementById("leads").innerText = "Error loading leads";
+      }
+    }
+
+    async function createCampaign() {
+      const data = {
+        name: document.getElementById("name").value || "Untitled",
+        objective: document.getElementById("objective").value,
+        info_bank: document.getElementById("info_bank").value,
+        target_keywords: document.getElementById("keywords").value,
+        rate_profile: document.getElementById("profile").value
+      };
+      if (!data.info_bank) { alert("Please add Information Bank"); return; }
+      await api("/api/campaigns", "POST", data);
+      tg.showAlert("Campaign created");
+      loadCampaigns();
+    }
+
+    async function startCampaign(id) {
+      await api(`/api/campaigns/${id}/start`, "POST");
+      tg.showAlert("Campaign started");
+      loadCampaigns();
+    }
+
+    async function pauseCampaign(id) {
+      await api(`/api/campaigns/${id}/pause`, "POST");
+      loadCampaigns();
+    }
+
+    function exportLeads() {
+      window.open(API_BASE + "/api/leads/export", "_blank");
+    }
+
+    loadStatus();
+    loadCampaigns();
+    loadLeads();
+    setInterval(() => { loadStatus(); loadCampaigns(); loadLeads(); }, 12000);
+  </script>
+</body>
+</html>

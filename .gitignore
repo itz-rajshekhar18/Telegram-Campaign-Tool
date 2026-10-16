@@ -1,0 +1,25 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Environment variables & secrets
+.env
+
+# Telegram sessions (sensitive auth data)
+sessions/*.session
+sessions/*.session-journal
+
+# Local database & runtime logs
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+logs/*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
