@@ -1,6 +1,11 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey, JSON
 from sqlalchemy.orm import declarative_base, relationship
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 Base = declarative_base()
 
@@ -9,8 +14,8 @@ class Account(Base):
     id = Column(Integer, primary_key=True)
     phone = Column(String, unique=True)
     session_name = Column(String, unique=True)
-    status = Column(String, default="idle")  # idle, active, restricted, banned
-    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="idle")  # idle, active, restricted, banned, unauthorized
+    created_at = Column(DateTime, default=utcnow)
 
 class Campaign(Base):
     __tablename__ = "campaigns"
@@ -21,7 +26,7 @@ class Campaign(Base):
     target_keywords = Column(Text)    # comma separated
     rate_profile = Column(String, default="balanced")  # safe / balanced / aggressive
     status = Column(String, default="draft")  # draft, running, paused, stopped
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
 
 class Group(Base):
@@ -47,7 +52,7 @@ class Lead(Base):
     notes = Column(Text, nullable=True)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"))
     last_message_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
 class Message(Base):
     __tablename__ = "messages"
@@ -58,7 +63,7 @@ class Message(Base):
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
 class Report(Base):
     __tablename__ = "reports"
@@ -70,4 +75,4 @@ class Report(Base):
     replies_received = Column(Integer, default=0)
     leads_captured = Column(Integer, default=0)
     summary = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
