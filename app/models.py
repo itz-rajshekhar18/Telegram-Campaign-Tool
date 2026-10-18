@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey, JSON
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
 Base = declarative_base()
@@ -23,6 +23,60 @@ class Campaign(Base):
     status = Column(String, default="draft")  # draft, running, paused, stopped
     created_at = Column(DateTime, default=datetime.utcnow)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    audience = Column(Text, default="")
+    audience_size = Column(Integer, default=0)
+    product_name = Column(String, default="")
+    value_proposition = Column(Text, default="")
+    proof = Column(Text, default="")
+    offer = Column(Text, default="")
+    call_to_action = Column(String, default="")
+    primary_metric = Column(String, default="conversions")
+    target_value = Column(Integer, default=0)
+    deadline = Column(String, default="")
+    consent_confirmed = Column(Boolean, default=False)
+    telegram_user_id = Column(Integer, nullable=True, index=True)
+    category = Column(String, default="general")
+    budget = Column(Float, default=0)
+    currency = Column(String, default="INR")
+    landing_page = Column(Text, default="")
+    language = Column(String, default="English")
+    tone = Column(String, default="friendly")
+    tags = Column(String, default="")
+    internal_notes = Column(Text, default="")
+
+class CampaignVariant(Base):
+    __tablename__ = "campaign_variants"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    label = Column(String, nullable=False)
+    attention = Column(Text, default="")
+    interest = Column(Text, default="")
+    desire = Column(Text, default="")
+    action = Column(Text, default="")
+    score = Column(Integer, default=0)
+    score_details = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def copy(self):
+        return "\n\n".join(part for part in (self.attention, self.interest, self.desire, self.action) if part)
+
+class MetricSnapshot(Base):
+    __tablename__ = "metric_snapshots"
+    __table_args__ = (UniqueConstraint("variant_id", "period", name="uq_metric_variant_period"),)
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    variant_id = Column(Integer, ForeignKey("campaign_variants.id"), nullable=False)
+    period = Column(String, nullable=False)
+    delivered = Column(Integer, default=0)
+    clicks = Column(Integer, default=0)
+    conversions = Column(Integer, default=0)
+    replies = Column(Integer, default=0)
+    signups = Column(Integer, default=0)
+    opt_outs = Column(Integer, default=0)
+    complaints = Column(Integer, default=0)
+    spend = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Group(Base):
     __tablename__ = "groups"
@@ -71,3 +125,112 @@ class Report(Base):
     leads_captured = Column(Integer, default=0)
     summary = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Subscriber(Base):
+    __tablename__ = "subscribers"
+    __table_args__ = (UniqueConstraint("campaign_id", "chat_id"),)
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    chat_id = Column(Integer, nullable=False)
+    name = Column(String, default="")
+    username = Column(String, default="")
+    active = Column(Boolean, default=True)
+    consent_source = Column(String, nullable=False)
+    notes = Column(Text, default="")
+    stage = Column(String, default="new")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CampaignLink(Base):
+    __tablename__ = "campaign_links"
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), primary_key=True)
+    token = Column(String, unique=True, nullable=False)
+
+
+class Broadcast(Base):
+    __tablename__ = "broadcasts"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    variant_id = Column(Integer, ForeignKey("campaign_variants.id"), nullable=False)
+    text = Column(Text, nullable=False)
+    status = Column(String, default="queued")
+    scheduled_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Delivery(Base):
+    __tablename__ = "deliveries"
+    __table_args__ = (UniqueConstraint("broadcast_id", "subscriber_id"),)
+    id = Column(Integer, primary_key=True)
+    broadcast_id = Column(Integer, ForeignKey("broadcasts.id"), nullable=False)
+    subscriber_id = Column(Integer, ForeignKey("subscribers.id"), nullable=False)
+    status = Column(String, default="pending")
+    message_id = Column(Integer, nullable=True)
+    error = Column(String, default="")
+    sent_at = Column(DateTime, nullable=True)
+
+
+class InboxMessage(Base):
+    __tablename__ = "inbox_messages"
+    id = Column(Integer, primary_key=True)
+    update_id = Column(Integer, unique=True, nullable=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    subscriber_id = Column(Integer, ForeignKey("subscribers.id"), nullable=False)
+    direction = Column(String, default="in")
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BotCursor(Base):
+    __tablename__ = "bot_cursor"
+    id = Column(Integer, primary_key=True)
+    offset = Column(Integer, default=0)
+
+
+class Conversion(Base):
+    __tablename__ = "conversions"
+    __table_args__ = (UniqueConstraint("campaign_id", "reference", name="uq_conversion_reference"),)
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    subscriber_id = Column(Integer, ForeignKey("subscribers.id"), nullable=True)
+    variant_id = Column(Integer, ForeignKey("campaign_variants.id"), nullable=True)
+    name = Column(String, nullable=False)
+    kind = Column(String, default="purchase")
+    status = Column(String, default="confirmed")
+    amount = Column(Float, default=0)
+    currency = Column(String, default="INR")
+    source = Column(String, default="telegram")
+    reference = Column(String, nullable=True)
+    occurred_on = Column(String, nullable=False, index=True)
+    notes = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SavedReport(Base):
+    __tablename__ = "saved_reports"
+    __table_args__ = (UniqueConstraint("owner_id", "scope_id", "start", "end", "currency", name="uq_saved_report_scope"),)
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, nullable=False)
+    scope_id = Column(Integer, nullable=False, default=0)
+    start = Column(String, nullable=False)
+    end = Column(String, nullable=False)
+    currency = Column(String, nullable=False)
+    payload = Column(JSON, nullable=False)
+    saved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class WorkspaceSettings(Base):
+    __tablename__ = "workspace_settings"
+    owner_id = Column(Integer, primary_key=True)
+    values = Column(JSON, nullable=False)
+
+
+class DirectSendRecord(Base):
+    __tablename__ = "direct_send_records"
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, nullable=False, index=True)
+    bot_id = Column(String, nullable=False)
+    text = Column(Text, nullable=False)
+    results = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

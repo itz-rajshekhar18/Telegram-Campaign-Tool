@@ -5,6 +5,12 @@ env/
 
 # Environment variables & secrets
 .env
+.env.*
+!.env.example
+.env-*.tmp
+.vercel/
+/telegram-bot-api/
+TELEGRAM_CAMPAIGN_TOOL_PROGRESS_*.md
 
 # Telegram sessions (sensitive auth data)
 sessions/*.session

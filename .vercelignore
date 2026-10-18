@@ -1,0 +1,15 @@
+.git
+.vercel
+.env
+.env.*
+.env-*.tmp
+data
+logs
+sessions
+telegram-bot-api
+legacy
+__pycache__
+**/__pycache__
+.venv
+venv
+TELEGRAM_CAMPAIGN_TOOL_PROGRESS_*.md

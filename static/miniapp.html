@@ -1,146 +1,100 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Campaign Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f9">
+  <title>Campaign Studio · Telegram</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 12px; background: var(--tg-theme-bg-color, #f5f5f5); color: var(--tg-theme-text-color, #222); }
-    h1 { font-size: 1.35rem; margin: 8px 0 16px; }
-    .card { background: var(--tg-theme-secondary-bg-color, #fff); border-radius: 14px; padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-    button { background: var(--tg-theme-button-color, #3390ec); color: var(--tg-theme-button-text-color, #fff); border: none; padding: 10px 14px; border-radius: 10px; width: 100%; margin-top: 6px; font-size: 0.95rem; }
-    button.secondary { background: #6c757d; }
-    input, textarea, select { width: 100%; padding: 10px; margin: 6px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 0.95rem; }
-    .status { font-size: 0.85rem; padding: 8px; background: #e8f4fd; border-radius: 8px; margin-bottom: 12px; }
-    .lead { padding: 8px 0; border-bottom: 1px solid #eee; font-size: 0.9rem; }
-    .hot { color: #d32f2f; font-weight: 600; }
-    .warm { color: #f57c00; }
-    .cold { color: #757575; }
-    .small { font-size: 0.8rem; color: #666; }
-  </style>
+  <link rel="stylesheet" href="/static/studio.css">
+  <script src="/static/insights.js" defer></script>
+  <script src="/static/connection.js" defer></script>
+  <script src="/static/reports.js" defer></script>
+  <script src="/static/workspace.js" defer></script>
+  <script src="/static/studio.js" defer></script>
 </head>
 <body>
-  <h1>Campaign Tool</h1>
-  <div class="status" id="status">Connecting...</div>
-
-  <div class="card">
-    <strong>New Campaign</strong>
-    <input id="name" placeholder="Campaign name">
-    <textarea id="objective" placeholder="Objective / goal" rows="2"></textarea>
-    <textarea id="info_bank" placeholder="Information Bank: product details, pricing, offers, FAQs, message style..." rows="5"></textarea>
-    <input id="keywords" placeholder="Target keywords (comma separated, e.g. education, school, coaching)">
-    <select id="profile">
-      <option value="safe">Safe (slowest, safest)</option>
-      <option value="balanced" selected>Balanced (recommended)</option>
-      <option value="aggressive">Aggressive (higher risk)</option>
-    </select>
-    <button onclick="createCampaign()">Create Campaign</button>
+  <aside class="sidebar">
+    <a class="brand" href="#campaigns"><span class="brand-mark">↗</span><span>Campaign<span class="brand-light">Studio</span></span></a>
+    <div class="workspace-label">YOUR WORKSPACE</div>
+    <nav aria-label="Main navigation">
+      <button data-page="campaigns" class="nav active"><span>▦</span>Campaigns</button>
+      <button data-page="audience" class="nav"><span>♧</span>Audience</button>
+      <button data-page="inbox" class="nav"><span>☷</span>Inbox</button>
+      <button data-page="conversions" class="nav"><span>◎</span>Conversions</button>
+      <button data-page="analytics" class="nav"><span>⌁</span>Analytics</button>
+      <button data-page="reports" class="nav"><span>▥</span>Reports</button>
+      <button data-page="settings" class="nav"><span>⚙</span>Connection</button>
+    </nav>
+    <div class="sidebar-note"><span class="dot"></span>Built for Telegram<p>One workspace. Better conversations.</p></div>
+    <div class="profile"><span class="avatar">CS</span><div><strong id="profile-name">Your workspace</strong><small id="profile-mode">Connecting…</small></div></div>
+  </aside>
+  <div class="shell">
+    <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-crumb">Campaigns</strong></div><span class="connection-pill" id="connection-pill">Connecting…</span></header>
+    <main id="main" tabindex="-1">
+      <div class="page-heading"><div><div class="eyebrow">MAKE EVERY MESSAGE COUNT</div><h1 id="page-title">Your campaigns</h1><p id="page-description">Plan, send, and learn. All in one place.</p></div><button id="new-campaign" class="primary">+ New campaign</button></div>
+      <div id="global-alert" class="notice hidden" role="alert"></div>
+      <section class="stats" aria-label="Workspace totals" id="stats"></section>
+      <div id="campaign-context" class="context hidden"><label for="campaign-select">Working on</label><select id="campaign-select"></select><span id="campaign-context-status"></span></div>
+      <section id="page-content" aria-live="polite"><div class="empty">Loading your workspace…</div></section>
+    </main>
+    <footer>Campaign Studio <span>Thoughtful campaigns. Real connections.</span></footer>
   </div>
-
-  <div class="card">
-    <strong>Active Campaigns</strong>
-    <div id="campaigns">Loading...</div>
-  </div>
-
-  <div class="card">
-    <strong>Leads</strong>
-    <button class="secondary" onclick="exportLeads()">Export Leads (CSV)</button>
-    <div id="leads">Loading...</div>
-  </div>
-
-  <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-
-    // ← CHANGE THIS to your laptop's local IP (same WiFi)
-    const API_BASE = "http://192.168.1.100:8000";
-
-    async function api(path, method = "GET", body = null) {
-      const opts = { method, headers: { "Content-Type": "application/json" } };
-      if (body) opts.body = JSON.stringify(body);
-      const res = await fetch(API_BASE + path, opts);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    }
-
-    async function loadStatus() {
-      try {
-        const s = await api("/api/status");
-        document.getElementById("status").innerHTML = 
-          `Connected • Accounts: ${s.accounts_connected} • Active campaigns: ${s.active_campaigns}`;
-      } catch (e) {
-        document.getElementById("status").innerText = "Cannot reach laptop. Same WiFi? Correct IP in this file?";
-      }
-    }
-
-    async function loadCampaigns() {
-      try {
-        const camps = await api("/api/campaigns");
-        document.getElementById("campaigns").innerHTML = camps.length ? camps.map(c => `
-          <div style="margin:10px 0; padding:10px; background:#f8f9fa; border-radius:10px;">
-            <strong>${c.name}</strong><br>
-            <span class="small">${c.status.toUpperCase()} • ${c.rate_profile}</span><br>
-            <span class="small">${(c.objective || "").substring(0,80)}</span>
-            <button onclick="startCampaign(${c.id})">Start</button>
-            <button class="secondary" onclick="pauseCampaign(${c.id})">Pause</button>
-          </div>
-        `).join("") : "<p class='small'>No campaigns yet.</p>";
-      } catch (e) {
-        document.getElementById("campaigns").innerText = "Error loading campaigns";
-      }
-    }
-
-    async function loadLeads() {
-      try {
-        const leads = await api("/api/leads");
-        document.getElementById("leads").innerHTML = leads.length ? leads.slice(0, 30).map(l => `
-          <div class="lead">
-            <strong>${l.username || l.first_name || "User"}</strong>
-            <span class="${l.score}">${l.score}</span> • ${l.status}
-            <div class="small">${l.language} • ${l.created_at ? l.created_at.substring(0,16) : ""}</div>
-          </div>
-        `).join("") : "<p class='small'>No leads captured yet.</p>";
-      } catch (e) {
-        document.getElementById("leads").innerText = "Error loading leads";
-      }
-    }
-
-    async function createCampaign() {
-      const data = {
-        name: document.getElementById("name").value || "Untitled",
-        objective: document.getElementById("objective").value,
-        info_bank: document.getElementById("info_bank").value,
-        target_keywords: document.getElementById("keywords").value,
-        rate_profile: document.getElementById("profile").value
-      };
-      if (!data.info_bank) { alert("Please add Information Bank"); return; }
-      await api("/api/campaigns", "POST", data);
-      tg.showAlert("Campaign created");
-      loadCampaigns();
-    }
-
-    async function startCampaign(id) {
-      await api(`/api/campaigns/${id}/start`, "POST");
-      tg.showAlert("Campaign started");
-      loadCampaigns();
-    }
-
-    async function pauseCampaign(id) {
-      await api(`/api/campaigns/${id}/pause`, "POST");
-      loadCampaigns();
-    }
-
-    function exportLeads() {
-      window.open(API_BASE + "/api/leads/export", "_blank");
-    }
-
-    loadStatus();
-    loadCampaigns();
-    loadLeads();
-    setInterval(() => { loadStatus(); loadCampaigns(); loadLeads(); }, 12000);
-  </script>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <dialog id="editor" class="editor-dialog">
+    <form id="campaign-form">
+      <div class="dialog-heading"><div><div class="eyebrow">CAMPAIGN BRIEF</div><h2 id="editor-title">Create a campaign</h2></div><button type="button" class="icon-button" data-close="editor" aria-label="Close">×</button></div>
+      <p class="muted">Start with a clear goal. Drafts use the templates saved in your workspace settings.</p>
+      <input type="hidden" name="campaign_id">
+      <label>Campaign name<input name="name" required maxlength="120" placeholder="e.g. October workshop launch"></label>
+      <label>Objective<textarea name="objective" required maxlength="1200" placeholder="What should this campaign achieve, and why?" rows="2"></textarea></label>
+      <div class="form-section">01 <strong>Audience & goal</strong></div>
+      <label>Who is this for?<input name="audience" required minlength="3" maxlength="500" placeholder="e.g. Designers who signed up for workshop updates"></label>
+      <div class="grid2"><label>Estimated audience size<input name="audience_size" type="number" min="1" max="100000000" required></label><label>Primary metric<select name="primary_metric" data-backend-options="primary_metrics"></select></label><label>Target count<input name="target_value" type="number" min="1" max="100000000" required></label><label>Deadline<input name="deadline" type="date" required></label></div>
+      <div class="form-section">02 <strong>Message essentials</strong></div>
+      <label>Product or service<input name="product_name" required maxlength="120" placeholder="What are you sharing?"></label>
+      <label>Value proposition<textarea name="value_proposition" required minlength="5" maxlength="500" rows="2" placeholder="The specific benefit your audience will get"></textarea></label>
+      <div class="grid2"><label>Proof <span class="optional">optional</span><textarea name="proof" maxlength="500" rows="2" placeholder="A real result, testimonial, or fact"></textarea></label><label>Offer <span class="optional">optional</span><textarea name="offer" maxlength="500" rows="2" placeholder="Price, availability, or incentive"></textarea></label></div>
+      <label>Call to action<input name="call_to_action" required minlength="3" maxlength="240" placeholder="e.g. Reserve your place: https://example.com/workshop"></label>
+      <label>Information bank<textarea name="info_bank" required maxlength="6000" rows="3" placeholder="Product details, pricing, FAQs, and useful context"></textarea></label>
+      <div class="form-section">03 <strong>Campaign details & budget</strong></div>
+      <div class="grid2">
+        <label>Category<input name="category" maxlength="80" required></label>
+        <label>Budget<input name="budget" type="number" min="0" max="1000000000" step="0.01" value="0"></label>
+        <label>Currency<input name="currency" pattern="[A-Z]{3}" maxlength="3" required></label>
+        <label>Language<input name="language" maxlength="80" required></label>
+        <label>Message tone<input name="tone" maxlength="80" required></label>
+        <label>Tags<input name="tags" maxlength="500" placeholder="workshop, october, design"></label>
+      </div>
+      <label>Landing page URL<input name="landing_page" type="url" maxlength="2000" placeholder="https://example.com/workshop"></label>
+      <p class="helper">Language and tone describe the brief for your manual draft review. Budget is a plan; actual spend is entered with daily results. Currency is locked once daily results exist.</p>
+      <label>Internal notes<textarea name="internal_notes" maxlength="6000" rows="3" placeholder="Team context, launch checklist, or follow-up plans"></textarea></label>
+      <label class="check"><input name="consent_confirmed" type="checkbox" required><span>This campaign is for people who explicitly agreed to receive these messages.</span></label>
+      <div id="editor-error" class="form-error" role="alert"></div><div class="dialog-actions"><button type="button" data-close="editor" class="secondary">Cancel</button><button type="submit" class="primary">Save campaign</button></div>
+    </form>
+  </dialog>
+  <dialog id="confirm-dialog"><div class="dialog-heading"><h2 id="confirm-title">Review send</h2><button class="icon-button" data-close="confirm-dialog" aria-label="Close">×</button></div><div id="confirm-body"></div><div class="dialog-actions"><button class="secondary" data-close="confirm-dialog">Cancel</button><button id="confirm-action" class="primary">Confirm</button></div><div id="confirm-error" class="form-error" role="alert"></div></dialog>
+  <dialog id="conversion-editor" class="editor-dialog">
+    <form id="conversion-form">
+      <div class="dialog-heading"><div><div class="eyebrow">OUTCOME TRACKING</div><h2 id="conversion-editor-title">Record a conversion</h2></div><button type="button" class="icon-button" data-close="conversion-editor" aria-label="Close">×</button></div>
+      <p class="muted">Record an individual outcome. This ledger stays separate from daily aggregate metrics.</p>
+      <input name="id" type="hidden">
+      <label>Campaign<select name="campaign_id" id="conversion-campaign" required></select></label>
+      <label>Conversion name<input name="name" required maxlength="160" placeholder="e.g. Workshop registration · Ananya"></label>
+      <div class="grid2">
+        <label>Type<select name="kind" data-backend-options="conversion_kinds"></select></label>
+        <label>Status<select name="status" data-backend-options="conversion_statuses"></select></label>
+        <label>Value<input name="amount" type="number" min="0" max="1000000000" step="0.01" value="0" required></label>
+        <label>Currency<input name="currency" pattern="[A-Z]{3}" maxlength="3" required></label>
+        <label>Occurred on<input name="occurred_on" type="date" required></label>
+        <label>Source<input name="source" maxlength="80" required></label>
+        <label>Contact <span class="optional">optional</span><select name="subscriber_id" id="conversion-contact"><option value="">Unattributed</option></select></label>
+        <label>Message variant <span class="optional">optional</span><select name="variant_id" id="conversion-variant"><option value="">Unattributed</option></select></label>
+      </div>
+      <label>Order or reference ID <span class="optional">optional</span><input name="reference" maxlength="120" placeholder="Unique within this campaign, e.g. ORD-1042"></label>
+      <label>Notes<textarea name="notes" rows="3" maxlength="4000" placeholder="Context about the outcome"></textarea></label>
+      <div class="form-error" role="alert"></div><div class="dialog-actions"><button type="button" class="secondary" data-close="conversion-editor">Cancel</button><button class="primary" type="submit">Save conversion</button></div>
+    </form>
+  </dialog>
 </body>
 </html>
