@@ -4,8 +4,20 @@ from app.models import Base
 from app.config import APP_ENV, DATABASE_URL
 from pathlib import Path
 from sqlalchemy.engine import make_url
+from sqlalchemy import event
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine = create_async_engine(DATABASE_URL, echo=False,
+                             connect_args={"timeout": 30} if DATABASE_URL.startswith("sqlite") else {})
+if DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine.sync_engine, "connect")
+    def sqlite_pragmas(connection, _):
+        cursor = connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=15000")
+        finally:
+            cursor.close()
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 async def init_db():
